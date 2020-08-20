@@ -1,0 +1,89 @@
+---
+title: "Teach me shiny (with trees)"
+author: "Till Straube"
+date: "August 20, 2020"
+output: html_document
+---
+
+# Setup
+
+```{r setup, message=F}
+load("trees.Rdata")
+library(tidyverse)
+knitr::opts_chunk$set(cache=T, warning=F, fig.align='center', out.width='90%')
+```
+
+# Quick variable reference
+
+Variable          | Type           | Content
+:-------          | :----          | :---------
+Pflanzjahr        | *double*       | Year of planting
+Kronendurchmesser | *double*       | Diameter of the treetop in meters (contains some questionable values)
+Gattung           | *factor (int)* | Best guess of the species (German name) of the tree (extracted from more complex string)
+Typ               | *factor (int)* | One of "Obst-/Nussbaum" (fruit-/nut-bearing trees), "Laubbaum" (other decidious trees) or "Nadelbaum" (conifers)
+Stadtteil         | *factor (int)* | Name of the municipal administrative unit (arrived at by `st_join` with shapefile)
+Objekt            | *char*         | Some sort of designator for the location (street, park)
+geometry          | *list*         | Holds geodata in Simple Features format (EPSG 32632)
+
+# Overview
+
+```{r sample}
+sample_n(trees, 5) %>%
+  knitr::kable("html") %>%
+  kableExtra::kable_styling()
+
+trees %>%
+  select(-geometry) %>%
+  summary()
+```
+
+# Some visualization ideas
+
+```{r heatmap}
+table(trees$Gattung, trees$Stadtteil) %>%
+  heatmap(col=colorRampPalette(RColorBrewer::brewer.pal(9, "YlGn"))(256))
+```
+
+```{r map}
+stadtteile %>%
+  sf::st_union() %>%
+  sf::st_make_grid(n=25, square=F) %>%
+  sf::st_as_sf() %>%
+  mutate(`Bäume`=sf::st_covers(., trees) %>% lengths) -> hex_grid
+
+ggplot(hex_grid) +
+  geom_sf(aes(fill=Bäume), color=NA) +
+  scale_fill_viridis_c() +
+  theme_void()
+```
+
+# Lots of species
+
+```{r alter}
+trees %>%
+  mutate(Alter = 2020 - Pflanzjahr) %>%
+  ggplot() +
+    geom_point(aes(x=Alter, y=Kronendurchmesser, color=Gattung)) +
+    theme_minimal()
+```
+
+```{r densities}
+trees %>%
+  select(Gattung, Pflanzjahr) %>%
+  remove_missing() %>%
+  ggplot() +
+    geom_density(aes(x=Pflanzjahr, fill=Gattung), color=NA, alpha=0.3) +
+    scale_x_continuous(limits = c(1850, 2020)) +
+    theme_minimal() +
+    theme(legend.position="bottom")
+```
+
+# A starting point?
+
+```{r hist}
+trees %>%
+  filter(Gattung=="Platane") %>%
+  ggplot() +
+    geom_histogram(aes(x=Pflanzjahr), bins=20) +
+    theme_minimal()
+```
